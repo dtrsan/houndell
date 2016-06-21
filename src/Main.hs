@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import qualified Data.Text.Lazy        as L
@@ -6,7 +8,9 @@ import           Houndell
 import           Houndell.Models
 import           Houndell.Network.HTTP as HN
 import           Houndell.UI.Simple
+import qualified Network.HTTP.Client   as HTTP
 import           Options.Applicative
+import qualified Control.Exception.Base as CE
 
 data HoundellMode = Simple|UI
 
@@ -51,24 +55,35 @@ sample = HoundellOptions
         <> short 'd'
         <> help "Print debugging info.")
 
+errorHandler :: HTTP.HttpException -> IO ()
+errorHandler ex = putStrLn $ "Error: " ++ show ex
+
 main :: IO ()
-main = execParser opts >>= runHoundell
-       where
-         opts = info (helper <*> sample)
-           (fullDesc
-           <> progDesc ("Command line client for Hound, an extremely fast source code search engine.\n" ++
-                        "Use -h or --help to print help.")
-           <> header "houndell - hound command line client" )
+main = do
+         houndelOptions <- execParser opts
+         CE.catch (runHoundell houndelOptions) errorHandler
+         where
+           opts = info (helper <*> sample)
+             (fullDesc
+             <> progDesc ("Command line client for Hound, an extremely fast source code search engine.\n" ++
+                          "Use -h or --help to print help.")
+             <> header "houndell - hound command line client written in Haskell" )
 
 runHoundell :: HoundellOptions -> IO ()
-runHoundell opts = return opts >>= toHoundSettings >>= fetchResults >>= outputResult
+runHoundell opts = fetchResults (toHoundSettings opts) >>= printResult opts
 
-toHoundSettings :: HoundellOptions -> IO HoundSettings
-toHoundSettings opts = return $ HoundSettings (Main.url opts) (toHoundSearchParams opts)
+toHoundSettings :: HoundellOptions -> HoundSettings
+toHoundSettings opts = HoundSettings (Main.url opts) houndSearchParams
+                       where
+                         houndSearchParams = HoundSearchParams (Main.query opts) (Main.repos opts)
 
-toHoundSearchParams :: HoundellOptions -> HoundSearchParams
-toHoundSearchParams opts = HoundSearchParams (Main.query opts) (Main.repos opts)
+printResult :: HoundellOptions -> Maybe HoundResponse -> IO ()
+printResult opts (Just r) = LIO.putStrLn $ Main.results opts r
+printResult _ Nothing = putStrLn "Unknown error occurred."
 
-outputResult :: Maybe HoundResponse -> IO ()
-outputResult (Just r) = LIO.putStrLn $ prettify r
-outputResult Nothing = putStrLn "Nothing here, an error occurred??"
+results :: HoundellOptions -> HoundResponse -> L.Text
+results opts r = debugOutput (debug opts) (toRequest (toHoundSettings opts)) `L.append` prettify r
+
+debugOutput :: Bool -> Maybe HTTP.Request -> L.Text
+debugOutput True (Just r) = "DEBUG: Request URL: " `L.append` L.pack (show r)
+debugOutput _ _ = ""

@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Houndell.Network.HTTP (HoundSettings(..), HoundSearchParams(..), fetchResults) where
+module Houndell.Network.HTTP (HoundSettings(..), HoundSearchParams(..), fetchResults, toRequest) where
 
+import           Control.Monad.Catch
 import           Data.Aeson                (FromJSON (..), Value (..), decode,
                                             eitherDecode, (.:))
 import qualified Data.ByteString.Char8     as S8
@@ -40,11 +41,14 @@ getSearchRepos s = case searchRepos (params s) of
     Just r -> S8.pack r
     Nothing -> "*"
 
+toRequest :: MonadThrow m => HoundSettings -> m Request
+toRequest s = setHoundParams s <$> parseUrl (url s ++ houndSearchEndpoint)
+
 mkRequest :: HoundSettings -> IO (Response LS8.ByteString)
 mkRequest s = do
     manager <- newManager defaultManagerSettings
-    request <- parseUrl $ (url s) ++ houndSearchEndpoint
-    httpLbs (setHoundParams s request) manager
+    request <- toRequest s
+    httpLbs request manager
 
 parseRequest :: IO (Response LS8.ByteString) -> IO (Maybe HoundResponse)
 parseRequest r = decode.responseBody <$> r
