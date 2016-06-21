@@ -23,6 +23,8 @@ data HoundellOptions = HoundellOptions {
     url   :: String,
     query :: String,
     repos :: Maybe String,
+    files :: Maybe String,
+    ignoreCase :: Bool,
     mode  :: Maybe HoundellMode,
     debug :: Bool
 }
@@ -44,6 +46,15 @@ sample = HoundellOptions
         <> short 'r'
         <> metavar "REPO1,REPO2,..."
         <> help "Comma separated repositories. "))
+    <*> optional(strOption (
+        long "files"
+        <> short 'f'
+        <> metavar "REGEXP"
+        <> help "Regex for files to include in search."))
+    <*> switch (
+        long "ignore-case"
+        <> short 'i'
+        <> help "Ignore case.")
     <*> optional (option(str >>= parseHoundellMode) (
         long "mode"
         <> short 'm'
@@ -75,7 +86,9 @@ runHoundell opts = fetchResults (toHoundSettings opts) >>= printResult opts
 toHoundSettings :: HoundellOptions -> HoundSettings
 toHoundSettings opts = HoundSettings (Main.url opts) houndSearchParams
                        where
-                         houndSearchParams = HoundSearchParams (Main.query opts) (Main.repos opts)
+                         houndSearchParams =
+                            HoundSearchParams (Main.query opts) (Main.repos opts)
+                                              (Main.files opts) (Main.ignoreCase opts)
 
 printResult :: HoundellOptions -> Maybe HoundResponse -> IO ()
 printResult opts (Just r) = LIO.putStrLn $ Main.results opts r

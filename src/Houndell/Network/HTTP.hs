@@ -19,7 +19,9 @@ data HoundSettings = HoundSettings {
 
 data HoundSearchParams = HoundSearchParams {
     searchQuery :: String,
-    searchRepos  :: Maybe String
+    searchRepos :: Maybe String,
+    searchFiles :: Maybe String,
+    searchIgnoreCase :: Bool
 }
 
 houndSearchEndpoint = "/api/v1/search"
@@ -30,7 +32,8 @@ setHoundParams s = setQueryString [
     ("repos", Just $ getSearchRepos s),
     ("rng", Just ":20"),
     ("q", Just $ getSearchQuery s),
-    ("i", Just "nope")
+    ("files", maybeGetSearchFiles s),
+    ("i", Just $ getIgnoreCase s)
   ]
 
 getSearchQuery :: HoundSettings -> S8.ByteString
@@ -40,6 +43,12 @@ getSearchRepos :: HoundSettings -> S8.ByteString
 getSearchRepos s = case searchRepos (params s) of
     Just r -> S8.pack r
     Nothing -> "*"
+
+maybeGetSearchFiles :: HoundSettings -> Maybe S8.ByteString
+maybeGetSearchFiles s = S8.pack <$> searchFiles (params s)
+
+getIgnoreCase :: HoundSettings -> S8.ByteString
+getIgnoreCase s = if searchIgnoreCase (params s) then "fosho" else "nope"
 
 toRequest :: MonadThrow m => HoundSettings -> m Request
 toRequest s = setHoundParams s <$> parseUrl (url s ++ houndSearchEndpoint)
